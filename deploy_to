@@ -1,0 +1,98 @@
+#!/usr/bin/env ruby
+require 'byebug'
+require 'fileutils'
+require 'colorize'
+require 'rest-client'
+
+def get_master_branch_id
+  `git fetch origin`
+  `git rev-parse --short origin/master`
+end
+
+def replace_text path, reg_from, to
+  @moved_files ||= []
+
+  puts "update #{path}"
+  new_path = path + '.bak'
+  FileUtils.mv path, new_path
+  @moved_files << [path, new_path]
+  content = File.read(new_path)
+  new_content = content.gsub(reg_from, to)
+  File.open(path, 'w') {|file| file.write(new_content) }
+end
+
+def move_files_back
+  return unless @moved_files
+  @moved_files.each do |old_path, new_path|
+    FileUtils.mv new_path, old_path
+  end
+end
+
+
+def notify msg, good= true
+  RestClient.post "https://hooks.pubu.im/services/example", {text: msg}.to_json, :content_type => :json, :accept => :json
+end
+
+
+def check_fail msg
+  if $?.exitstatus != 0
+    raise msg
+  end
+end
+
+
+
+if ARGV.length == 0
+  puts "USAGE: ./deploy staging [commit_id]"
+  exit
+end
+
+target = ARGV[0]
+
+puts "switch to #{target} machine..".green
+env =  `docker-machine env #{target}`
+env.lines do |line|
+  key = line.gsub(/[A-Z_]+/).first
+  value = line.gsub(/(?<=").+(?=")/).first
+  ENV[key] = value if key && value
+end
+
+if `docker-machine active`.chomp != target
+  puts "cant't switch to #{target}".red
+  exit
+end
+
+system "docker ps"
+
+target_commit_id = ARGV[1] || get_master_branch_id
+
+notify "#{ENV['USER']} 开始部署到 #{target}.. VERSION: #{target_commit_id}"
+
+begin
+  puts "update Deployed version in Dockerfile...".green
+  replace_text "./docker_files/web/Dockerfile", /DEPLOYED_VERSION=.+/, "DEPLOYED_VERSION=#{target_commit_id}"
+
+  replace_text "./production.yml", /production\.env\.real/, "#{target}.env.real"
+
+  docker_compose_command = "docker-compose -f production.yml"
+  puts 'building images...'.green
+  system "#{docker_compose_command} build"
+  check_fail 'building failed.'
+
+  puts 'migrating...'.green
+  system "#{docker_compose_command} run --rm web rake db:migrate"
+  check_fail 'migrating failed.'
+
+  puts 'up...'.green
+  system "#{docker_compose_command} up -d --no-deps"
+  check_fail 'up failed.'
+
+  notify "成功部署到 #{target}."
+  puts 'Done.'.green
+
+rescue StandardError => e
+  notify '部署失败', false
+  raise e
+ensure
+  move_files_back
+end

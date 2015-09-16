@@ -1,0 +1,15 @@
+postgres:
+  image: postgres
+pg_data:
+  image: postgres
+  volumes:
+    - /var/lib/postgresql/data
+  command: /bin/true
+
+redis:
+  image: redis
+redis_data:
+  image: redis
+  volumes:
+    - /data
+  command: /bin/true

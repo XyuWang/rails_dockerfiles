@@ -1,0 +1,72 @@
+web:
+  build: ./docker_files/web
+  links:
+    - redis
+    - postgres
+  command: unicorn -c config/unicorn.rb -E $RAILS_ENV
+  restart: always
+  env_file:
+    - production.env.real
+  log_driver: "syslog"
+worker:
+  build: ./docker_files/web
+  log_driver: "syslog"
+  links:
+    - redis
+    - postgres
+  command: sidekiq
+  restart: always
+  env_file:
+    - production.env.real
+
+cronjob:
+  build: ./docker_files/web
+  log_driver: "syslog"
+  container_name: railgun_cronjob
+  links:
+    - redis
+    - postgres
+  command: /cron.sh
+  restart: always
+  env_file:
+    - production.env.real
+nginx:
+  container_name: railgun_nginx
+  log_driver: "syslog"
+  restart: always
+  image: jwilder/nginx-proxy
+  ports:
+    - "4000:80"
+  volumes:
+    - /var/run/docker.sock:/tmp/docker.sock:ro
+
+redis:
+  container_name: railgun_redis
+  log_driver: "syslog"
+  extends:
+    file: common.yml
+    service: redis
+  volumes_from:
+    - redis_data
+  restart: always
+postgres:
+  container_name: railgun_postgres
+  log_driver: "syslog"
+  extends:
+    file: common.yml
+    service: postgres
+  volumes_from:
+    - pg_data
+  restart: always
+  env_file:
+    - production.env.real
+pg_data:
+  container_name: railgun_pg_data
+  extends:
+    file: common.yml
+    service: pg_data
+redis_data:
+  container_name: railgun_redis_data
+  extends:
+    file: common.yml
+    service: redis_data

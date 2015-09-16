@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+
+def set_docker_env
+  if `docker-machine status default`.chomp != 'Running'
+    puts 'Starting default machine...'
+    system 'docker-machine start default'
+  end
+
+  env = `docker-machine env default`.delete '"'
+  env.scan(/(?<=export )[A-Z_]+=.+/).each do |line|
+    key, value = line.split '='
+    ENV[key] = value
+  end
+end
+
+def update_docker_files
+  system 'cp code/Gemfile code/Gemfile.lock docker_files/web'
+  system 'cp code/package.json docker_files/web'
+end
+
+def check_docker_machine
+  if @status
+    return @status
+  else
+     `docker-machine status default`
+     @status = ($?.exitstatus == 0)
+  end
+end
+
+if ARGV.size != 0
+  if ARGV[0] == 'init'
+    command =  "docker-compose run web /bin/bash -c ' rake db:setup && RAILS_ENV=test rake db:setup'"
+  elsif ARGV[0] == 'c'
+    command =  "docker-compose run web /bin/bash"
+  elsif ARGV[0] == 'm'
+    command =  "docker-compose run web rake db:migrate"
+  else
+    command =  "docker-compose run web #{ARGV.join ' '}"
+  end
+else
+  command = 'docker-compose run --service-ports web'
+  watch_files = true
+end
+
+
+set_docker_env if check_docker_machine
+update_docker_files
+system 'docker-compose build web'
+system command

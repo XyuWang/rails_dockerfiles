@@ -1,0 +1,61 @@
+web:
+  build: ./docker_files/web
+  ports:
+    - "4000:4000"
+  env_file:
+    - development.env.real
+  volumes:
+    - ./code:/code
+  links:
+    - redis
+    - postgres
+  command: guard
+  environment:
+    - TRUSTED_IP=192.168.99.1
+  extra_hosts:
+    - "example.com:192.168.99.1"
+
+worker:
+  build: ./docker_files/web
+  env_file:
+    - development.env.real
+  volumes:
+    - ./code:/code
+  links:
+    - redis
+    - postgres
+  command: sidekiq
+  extra_hosts:
+    - "example.com:192.168.99.1"
+
+cronjob:
+  build: ./docker_files/web
+  env_file:
+    - development.env.real
+  volumes:
+    - ./code:/code
+  links:
+    - redis
+    - postgres
+  command: /cron.sh
+
+redis:
+  extends:
+    file: common.yml
+    service: redis
+  volumes_from:
+    - redis_data
+postgres:
+  extends:
+    file: common.yml
+    service: postgres
+  volumes_from:
+    - pg_data
+pg_data:
+  extends:
+    file: common.yml
+    service: pg_data
+redis_data:
+  extends:
+    file: common.yml
+    service: redis_data

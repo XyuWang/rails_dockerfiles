@@ -1,0 +1,9 @@
+{
+  "name": "dsl-generated dependencies",
+  "dependencies": {
+    "moment": "2.1.0",
+    "underscore": "1.8.3",
+    "stellar": "0.6.2",
+    "jquery.easing": "1.3"
+  }
+}
